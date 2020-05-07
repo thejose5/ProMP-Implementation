@@ -12,16 +12,16 @@ class ProMP:
         self.ndemos = ndemos
         self.human_dofs = hum_dofs
         self.robot_dofs = robot_dofs
-        self.nBasis = 30 # No. of basis functions per time step
+        self.nBasis = 30 # No. of basis functions per time step...
         self.noise_stdev = 1
         self.dt = dt
 
         # data is a list, the ith element of which represents an Nx4 array containing the data of the ith demo
-        self.data = self.loadData(training_address)
+        self.data = self.loadData(training_address,dt)
         print("Data Loaded")
         # Time normalization and encoding alpha
         self.alpha, self.alphaM, self.alphaV, self.mean_time_steps = self.PhaseNormalization(self.data)
-        print("Alphas Obtained")
+        # print("Alphas Obtained")
         # Normalize the data by writing it in terms of phase variable z. dz = alpha*dt
         self.ndata = self.normalizeData(self.alpha, self.dt, self.data, (self.robot_dofs+self.human_dofs),self.mean_time_steps)
         print("Data Normalized")
@@ -38,7 +38,7 @@ class ProMP:
         # self.obsndata = np.empty((0, (self.promp["nJoints"])))
         print("Initialization Complete")
 
-    def loadData(self, addr):
+    def loadData(self, addr, dt):
         data = []
         for i in range(self.ndemos):
             human = np.loadtxt(open(addr + "\letterAtr" + str(i + 1) + ".csv"), delimiter=",")
@@ -81,6 +81,9 @@ class ProMP:
                 for k in range(dofs):
                     row.append(data[i][whole][k] + frac * (data[i][whole + 1][k] - data[i][whole][k]))
                 demo_ndata = np.append(demo_ndata, [row], axis=0)
+            # phasestamp = np.linspace(0,alpha[i]*dt*(demo_ndata.shape[0]-1),demo_ndata.shape[0])
+            # phasestamp = phasestamp.reshape((phasestamp.shape[0],1))
+            # demo_ndata = np.concatenate((demo_ndata,phasestamp),axis=1)
             ndata.append(demo_ndata)
 
         return ndata
@@ -91,14 +94,13 @@ class ProMP:
         nTraj = data[0].shape[0]
         nBasis = self.nBasis
 
-        weight = {"nBasis": nBasis, "nJoints": nJoints, "nTraj": nTraj, "nDemo": nDemo}
+        weight = {"nBasis": nBasis, "nJoints": nJoints, "nDemo": nDemo, "nTraj":nTraj}
         weight["my_linRegRidgeFactor"] = 1e-08 * np.identity(nBasis)
 
         basis = self.generateGaussianBasis(self.dt, nTraj,nBasis)
         weight = self.leastSquareOnWeights(weight, basis, data)
 
-        pmp = {"w": weight, "basis": basis, "nBasis": nBasis, "nJoints": nJoints, "nDemo": nDemo,
-               "nTraj": nTraj}
+        pmp = {"w": weight, "basis": basis, "nBasis": nBasis, "nJoints": nJoints, "nDemo": nDemo, "nTraj":nTraj}
 
         return pmp
 
@@ -143,13 +145,13 @@ class ProMP:
 
         return weight
 
-    def predict(self, data):
+    def predict(self, data,alpha_real=1):
         promp = self.promp
         mu_new = self.mu_new
         cov_new = self.cov_new
         self.obsdata = np.append(self.obsdata,data,axis=0) # accumulate all the data from previous steps
-        # alpha = self.findAlpha(self.obsdata)
-        alpha = 1       #self.alpha[42]
+        alpha = self.findAlpha(self.obsdata)
+        true_alpha = alpha_real
         obsndata = self.normalizeObservation(self.obsdata, alpha)
 
         mu_new, cov_new = self.conditionNormDist(obsndata, alpha, mu_new, cov_new)
@@ -158,33 +160,54 @@ class ProMP:
         return prdct_data_t
 
     def findAlpha(self, obs):
+        data = self.data
+        alphas = self.alpha
+        obsdofs = self.human_dofs
+        bestalpha = 1
+        startfrom = 2
+        for j in range(startfrom,obs.shape[0]):
+            min = np.inf
+            for i in range(len(data)):
+                if(data[i].shape[0]-1>=j):
+                    diff = data[i][j,:] - obs[j,:]
+                    sumsqr=0
+                    for k in range(obsdofs):
+                        sumsqr = sumsqr+diff[k]**2
+                    meansqr = sumsqr/(k+1)
+                    rms = np.sqrt(meansqr)
+                    if(rms<min):
+                        min = rms
+                        minind = i
+            bestalpha = (alphas[minind]+bestalpha*(j-startfrom))/(j+1-startfrom)
+        return bestalpha
+
         # Find log probability of observation given alpha and log probability of alpha and add the two
         # This gives log probability of alpha given observation. The alpha with max of this prob is the winner
-        alpha_samples = self.alpha_samples
-        alphaM = self.alphaM
-        alphaV = self.alphaV
-        alpha_dist = scipy.stats.norm(alphaM,alphaV)
-        lprob_alphas = []
-        inv_obs_noise = 0.00001
-        mu_w = self.promp["w"]["mean_full"]
-        sig_w = self.promp["w"]["cov_full"]
-        dt = self.dt
+        # alpha_samples = self.alpha_samples
+        # alphaM = self.alphaM
+        # alphaV = self.alphaV
+        # alpha_dist = scipy.stats.norm(alphaM,alphaV)
+        # lprob_alphas = []
+        # inv_obs_noise = 0.00001
+        # mu_w = self.promp["w"]["mean_full"]
+        # sig_w = self.promp["w"]["cov_full"]
+        # dt = self.dt
+        #
+        # for i in range(alpha_samples.shape[0]):
+        #     # log probability (actually likelihood) alpha
+        #     lp_alpha = math.log(alpha_dist.pdf(alpha_samples[i]))
+        #
+        #     # log probability (actually likelihood) of observation given alpha
+        #     nTraj = int(obs.shape[0]/alpha_samples[i])
+        #     nBasis = self.nBasis
+        #     basis = self.generateGaussianBasis(alpha_samples[i]*dt,nTraj,nBasis)
+        #     lp_obs_alpha = self.computeLogProbObs_alpha(obs,basis,mu_w,sig_w,alpha_samples[i],inv_obs_noise)
+        #     lprob_alphas.append(lp_alpha+lp_obs_alpha)
+        #
+        # best_alpha_index = lprob_alphas.index(max(lprob_alphas))
+        # best_alpha = alpha_samples[best_alpha_index]
 
-        for i in range(alpha_samples.shape[0]):
-            # log probability (actually likelihood) alpha
-            lp_alpha = math.log(alpha_dist.pdf(alpha_samples[i]))
-
-            # log probability (actually likelihood) of observation given alpha
-            nTraj = int(obs.shape[0]/alpha_samples[i])
-            nBasis = self.nBasis
-            basis = self.generateGaussianBasis(alpha_samples[i]*dt,nTraj,nBasis)
-            lp_obs_alpha = self.computeLogProbObs_alpha(obs,basis,mu_w,sig_w,alpha_samples[i],inv_obs_noise)
-            lprob_alphas.append(lp_alpha+lp_obs_alpha)
-
-        best_alpha_index = lprob_alphas.index(max(lprob_alphas))
-        best_alpha = alpha_samples[best_alpha_index]
-
-        return best_alpha
+        # return best_alpha
 
 
 
@@ -333,29 +356,29 @@ class ProMP:
         plt.plot(op_traj[:, 2], op_traj[:, 3], label="Prediction")
         plt.legend()
 
-        plt.figure(3)
-        plt.title("Human x")
-        plt.plot(expected_op[:, 0], label="True")
-        plt.plot(op_traj[:, 0], label="Prediction")
-        plt.legend()
-
-        plt.figure(4)
-        plt.title("Human y")
-        plt.plot(expected_op[:, 1], label="True")
-        plt.plot(op_traj[:, 1], label="Prediction")
-        plt.legend()
-
-        plt.figure(5)
-        plt.title("Robot x")
-        plt.plot(expected_op[:, 2], label="True")
-        plt.plot(op_traj[:, 2], label="Prediction")
-        plt.legend()
-
-        plt.figure(6)
-        plt.title("Robot y")
-        plt.plot(expected_op[:, 3], label="True")
-        plt.plot(op_traj[:, 3], label="Prediction")
-        plt.legend()
+        # plt.figure(3)
+        # plt.title("Human x")
+        # plt.plot(expected_op[:, 0], label="True")
+        # plt.plot(op_traj[:, 0], label="Prediction")
+        # plt.legend()
+        #
+        # plt.figure(4)
+        # plt.title("Human y")
+        # plt.plot(expected_op[:, 1], label="True")
+        # plt.plot(op_traj[:, 1], label="Prediction")
+        # plt.legend()
+        #
+        # plt.figure(5)
+        # plt.title("Robot x")
+        # plt.plot(expected_op[:, 2], label="True")
+        # plt.plot(op_traj[:, 2], label="Prediction")
+        # plt.legend()
+        #
+        # plt.figure(6)
+        # plt.title("Robot y")
+        # plt.plot(expected_op[:, 3], label="True")
+        # plt.plot(op_traj[:, 3], label="Prediction")
+        # plt.legend()
 
         plt.show()
 
@@ -384,30 +407,31 @@ def comparePlots(ip_traj, op_traj):  # This function is only for debugging purpo
 
 def main(args):
     # TODO: Allow sequential observations
-    pmp = ProMP(ndemos=50, hum_dofs=2, robot_dofs=2, dt=0.1, training_address="Data\Human A Robot B 1")
+    pmp = ProMP(ndemos=45, hum_dofs=2, robot_dofs=2, dt=0.1, training_address="Data\Human A Robot B 1")
     # To give different inputs change the parameters passed to the constructor above.
     # ndemos = No. of demos, hum_dofs = master dofs, robot_dofs = slave dofs, dt = delta t between 2 position measurements in a demo
     # training_address = path of the folder in which your data is present
     # Also to be changed: In loadData line 44 and 45, change the name of your master data and slave data file name (without the demo number).
     # Default master data file name: letterAtr followed by demo number.
     # Default slave data file name: letterBtr followed by demo number.
-
-    test_data = np.loadtxt(open("Data\Human A Robot B 1\letterAtr43.csv"), delimiter=",")
-    num_pts = 90  # Enter the number of points you want in your input
+    testdemo = 49
+    test_data = np.loadtxt(open("Data\Human A Robot B 1\letterAtr"+str(testdemo)+".csv"), delimiter=",")
+    test_data_robot = np.loadtxt(open("Data\Human A Robot B 1\letterBtr"+str(testdemo)+".csv"), delimiter=",")
+    ip_traj = np.concatenate((test_data,test_data_robot),axis=1)
+    num_pts = int(0.9*test_data.shape[0])  # Enter the number of points you want in your input
     test_data = np.delete(test_data, np.linspace(num_pts, (len(test_data) - 1), (len(test_data) - num_pts), dtype=int),axis=0)  # Trimming data
     test_data = np.append(test_data, np.zeros((test_data.shape[0], 2)), axis=1)
-
+    true_alpha = ip_traj.shape[0]/pmp.mean_time_steps
     # Expected observation data format: [col(obs of human dof1),col(obs of human dof2),...,col(obs of last human dof), (columns of zeros for each robot dof)]
-    for i in range(test_data.shape[0]):
-        indata = test_data[i,:].reshape(1,4)
-        traj = pmp.predict(indata)
+    # for i in range(test_data.shape[0]):
+    #     indata = test_data[i,:].reshape(1,4)
+    traj = pmp.predict(test_data,true_alpha)
 
     print("\nPrediction Executed Successfully \nPlotting...")
     # If you want to use sequential observation data, at each time step, obtain the observation in the "expected format" (line 394) with a single row
     # and pass it in pmp.predict as test_data.
 
     # Now to plot the results
-    ip_traj = pmp.data[42]
     pmp.plotTrajs(traj,ip_traj)
     pmp.resetProMP()
 
