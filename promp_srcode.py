@@ -343,6 +343,8 @@ class ProMP:
 
     def plotTrajs(self, op_traj, expected_op):
         nDofs = self.promp["nJoints"]
+        percerror = (np.abs(((expected_op.shape[0]) - (op_traj.shape[0]))) / (expected_op.shape[0] - 1)) * 100
+        print("Percentage Error in Time", percerror)
 
         plt.figure(1)
         plt.title("Human Trajectory")
@@ -394,6 +396,7 @@ def printarr(arr, name="None"):  # This function is only for debugging purposes
     for i in range(arr.shape[0]):
         print(arr[i, :])
 def comparePlots(ip_traj, op_traj):  # This function is only for debugging purposes
+
     plt.figure(1)
     plt.plot(ip_traj[:, 0], ip_traj[:, 1])
     plt.show()
@@ -414,14 +417,14 @@ def main(args):
     # Also to be changed: In loadData line 44 and 45, change the name of your master data and slave data file name (without the demo number).
     # Default master data file name: letterAtr followed by demo number.
     # Default slave data file name: letterBtr followed by demo number.
-    testdemo = 49
+    testdemo = 50
     test_data = np.loadtxt(open("Data\Human A Robot B 1\letterAtr"+str(testdemo)+".csv"), delimiter=",")
     test_data_robot = np.loadtxt(open("Data\Human A Robot B 1\letterBtr"+str(testdemo)+".csv"), delimiter=",")
     ip_traj = np.concatenate((test_data,test_data_robot),axis=1)
     num_pts = int(0.9*test_data.shape[0])  # Enter the number of points you want in your input
     test_data = np.delete(test_data, np.linspace(num_pts, (len(test_data) - 1), (len(test_data) - num_pts), dtype=int),axis=0)  # Trimming data
     test_data = np.append(test_data, np.zeros((test_data.shape[0], 2)), axis=1)
-    true_alpha = ip_traj.shape[0]/pmp.mean_time_steps
+    true_alpha = ip_traj.shape[0]/123.37
     # Expected observation data format: [col(obs of human dof1),col(obs of human dof2),...,col(obs of last human dof), (columns of zeros for each robot dof)]
     # for i in range(test_data.shape[0]):
     #     indata = test_data[i,:].reshape(1,4)
