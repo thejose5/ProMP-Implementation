@@ -346,17 +346,20 @@ class ProMP:
         percerror = (np.abs(((expected_op.shape[0]) - (op_traj.shape[0]))) / (expected_op.shape[0] - 1)) * 100
         print("Percentage Error in Time", percerror)
 
-        plt.figure(1)
-        plt.title("Human Trajectory")
-        plt.plot(expected_op[:, 0], expected_op[:, 1], label="True")
-        plt.plot(op_traj[:, 0], op_traj[:, 1], label="Prediction")
-        plt.legend()
+        fig, axs = plt.subplots(2)
+        fig.tight_layout(pad=2)
+        # plt.figure(1)
+        axs[0].set_title("Human Trajectory")
+        axs[0].plot(expected_op[:, 0], expected_op[:, 1], label="True")
+        axs[0].plot(op_traj[:, 0], op_traj[:, 1], label="Prediction")
+        axs[0].set(xlabel="X position",ylabel="Y position")
+        axs[0].legend()
 
-        plt.figure(2)
-        plt.title("Robot Trajectory")
-        plt.plot(expected_op[:, 2], expected_op[:, 3], label="True")
-        plt.plot(op_traj[:, 2], op_traj[:, 3], label="Prediction")
-        plt.legend()
+        axs[1].set_title("Robot Trajectory")
+        axs[1].plot(expected_op[:, 2], expected_op[:, 3], label="True")
+        axs[1].plot(op_traj[:, 2], op_traj[:, 3], label="Prediction")
+        axs[1].set(xlabel="X position", ylabel="Y position")
+        axs[1].legend()
 
         # plt.figure(3)
         # plt.title("Human x")
@@ -417,11 +420,11 @@ def main(args):
     # Also to be changed: In loadData line 44 and 45, change the name of your master data and slave data file name (without the demo number).
     # Default master data file name: letterAtr followed by demo number.
     # Default slave data file name: letterBtr followed by demo number.
-    testdemo = 50
+    testdemo = 49
     test_data = np.loadtxt(open("Data\Human A Robot B 1\letterAtr"+str(testdemo)+".csv"), delimiter=",")
     test_data_robot = np.loadtxt(open("Data\Human A Robot B 1\letterBtr"+str(testdemo)+".csv"), delimiter=",")
     ip_traj = np.concatenate((test_data,test_data_robot),axis=1)
-    num_pts = int(0.9*test_data.shape[0])  # Enter the number of points you want in your input
+    num_pts = int(0.5*test_data.shape[0])  # Enter the number of points you want in your input
     test_data = np.delete(test_data, np.linspace(num_pts, (len(test_data) - 1), (len(test_data) - num_pts), dtype=int),axis=0)  # Trimming data
     test_data = np.append(test_data, np.zeros((test_data.shape[0], 2)), axis=1)
     true_alpha = ip_traj.shape[0]/123.37
