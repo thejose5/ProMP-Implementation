@@ -8,7 +8,7 @@ The goal of the algorithm is to train a robot on a specific task through multipl
 In the test case used to validate this implementation, the robot writes the letter B when the human writes the letter A. From the following
 image, the good spatial performance of the algorithm is clear.
 
-
+![alt text](https://github.com/thejose5/ProMP-Implementation/blob/master/AB.png?raw=true)
 
 For the temporal coordination, the algorithm used was different from the one given in the paper. The scaling factor for the observation
 trajectory was estimated by comparing the trajectory with similar training trajectories. The error in estimated trajectory duration and actual trajectory duration was limited to 6%.
